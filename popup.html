@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Bibly</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0812; --surface: #120f22; --surface2: #1c1835;
+      --border: #2a2448; --purple: #8b5cf6; --purple2: #a78bfa;
+      --pink: #ec4899; --green: #34d399; --yellow: #fbbf24;
+      --red: #f87171; --text: #f0ebff; --dim: #7c6fa0;
+    }
+
+    body { width: 400px; background: var(--bg); font-family: 'DM Sans', sans-serif; color: var(--text); cursor: none; }
+
+    /* ── Cursor */
+    .cursor {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      position: fixed; pointer-events: none; z-index: 99999;
+      transform: translate(-50%,-50%); transition: transform .08s ease;
+      box-shadow: 0 0 14px rgba(139,92,246,.7), 0 0 28px rgba(139,92,246,.3);
+      animation: cursorPulse 2.5s ease-in-out infinite;
+    }
+    .cursor-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: white; opacity: .9;
+      position: fixed; pointer-events: none; z-index: 100000;
+      transform: translate(-50%,-50%);
+    }
+    @keyframes cursorPulse {
+      0%,100% { box-shadow: 0 0 14px rgba(139,92,246,.7), 0 0 28px rgba(139,92,246,.3); }
+      50% { box-shadow: 0 0 20px rgba(236,72,153,.9), 0 0 40px rgba(236,72,153,.4); }
+    }
+
+    /* ── Header */
+    .header {
+      background: linear-gradient(135deg,#1c1835,#0f0d1f);
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      position: relative; overflow: hidden;
+    }
+    .header::before {
+      content:''; position:absolute; top:-20px; right:-20px;
+      width:80px; height:80px; border-radius:50%;
+      background: radial-gradient(circle,rgba(139,92,246,.25) 0%,transparent 70%);
+    }
+    .logo {
+      width:34px; height:34px; border-radius:10px;
+      background: linear-gradient(135deg,#8b5cf6,#ec4899);
+      display:flex; align-items:center; justify-content:center;
+      font-size:16px; flex-shrink:0;
+      box-shadow: 0 4px 12px rgba(139,92,246,.4);
+    }
+    .header h1 { font-size:15px; font-weight:700; letter-spacing:.03em; }
+    .header p { font-size:10px; color:var(--dim); margin-top:1px; }
+
+    /* ── Status */
+    .status-bar {
+      display:flex; align-items:center; gap:8px;
+      padding:7px 18px; background:var(--surface);
+      border-bottom:1px solid var(--border); font-size:11px;
+    }
+    .dot { width:6px; height:6px; border-radius:50%; background:var(--dim); flex-shrink:0; transition:all .3s; }
+    .dot.ok  { background:var(--green); box-shadow:0 0 6px var(--green); }
+    .dot.err { background:var(--red);   box-shadow:0 0 6px var(--red); }
+    .dot.spin { background:var(--yellow); animation:blink .7s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+    #status-msg { color:var(--dim); }
+
+    /* ── Tabs */
+    .tabs { display:flex; border-bottom:1px solid var(--border); }
+    .tab {
+      flex:1; padding:9px; text-align:center; font-size:11px; font-weight:600;
+      color:var(--dim); cursor:pointer; border-bottom:2px solid transparent;
+      transition:all .2s; background:none; border-top:none; border-left:none; border-right:none;
+    }
+    .tab.active { color:var(--purple2); border-bottom-color:var(--purple); }
+    .tab:hover:not(.active) { color:var(--text); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    /* ── Botões de fluxo (hero) */
+    .flow-section { padding:16px 16px 12px; border-bottom:1px solid var(--border); }
+    .flow-section-label {
+      font-size:9px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.12em; color:var(--dim); margin-bottom:10px;
+    }
+    .flow-btns { display:flex; gap:10px; }
+    .flow-btn {
+      flex:1; padding:18px 10px; border-radius:14px; border:none; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:11px; font-weight:700;
+      display:flex; flex-direction:column; align-items:center; gap:7px;
+      transition:all .2s; position:relative; overflow:hidden;
+    }
+    .flow-btn .icon { font-size:24px; line-height:1; }
+    .flow-btn .label { font-size:11px; font-weight:700; }
+    .flow-btn .sub { font-size:9px; font-weight:500; opacity:.75; }
+
+    .flow-btn-sp {
+      background:linear-gradient(135deg,rgba(52,211,153,.12),rgba(139,92,246,.08));
+      border:1px solid rgba(52,211,153,.4); color:#34d399;
+    }
+    .flow-btn-sp:hover:not(:disabled) {
+      background:linear-gradient(135deg,rgba(52,211,153,.22),rgba(139,92,246,.14));
+      box-shadow:0 6px 20px rgba(52,211,153,.3); transform:translateY(-2px);
+    }
+    .flow-btn-pesquisa {
+      background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(236,72,153,.08));
+      border:1px solid rgba(139,92,246,.4); color:#a78bfa;
+    }
+    .flow-btn-pesquisa:hover:not(:disabled) {
+      background:linear-gradient(135deg,rgba(139,92,246,.22),rgba(236,72,153,.14));
+      box-shadow:0 6px 20px rgba(139,92,246,.3); transform:translateY(-2px);
+    }
+    .flow-btn:disabled { opacity:.3; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
+
+    /* ── Progress ring ao executar */
+    .running-indicator {
+      display:none; align-items:center; gap:8px;
+      padding:0 16px 12px; font-size:11px; color:var(--yellow);
+    }
+    .running-indicator.visible { display:flex; }
+    .spinner {
+      width:14px; height:14px; border-radius:50%;
+      border:2px solid rgba(251,191,36,.2); border-top-color:var(--yellow);
+      animation:spin .7s linear infinite; flex-shrink:0;
+    }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* ── Lead card */
+    .lead-section { padding:10px 16px 12px; border-bottom:1px solid var(--border); }
+    .lead-card {
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:10px; padding:12px; font-size:12px;
+      color:var(--dim); line-height:1.5; min-height:54px;
+    }
+    .lead-card.has-data { color:var(--text); }
+    .lead-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+    .lead-phone { font-family:'DM Mono',monospace; font-size:12px; color:var(--green); margin-bottom:7px; }
+    .tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .tag {
+      font-size:10px; padding:2px 8px; border-radius:4px;
+      background:var(--surface); border:1px solid var(--border); color:var(--dim);
+    }
+    .follow-badge {
+      font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px;
+      background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(236,72,153,.12));
+      border:1px solid rgba(139,92,246,.5); color:var(--purple2);
+      font-family:'DM Mono',monospace;
+    }
+    .activity-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px;
+    }
+    .activity-badge.sp   { background:rgba(52,211,153,.1);  border:1px solid rgba(52,211,153,.3);  color:var(--green); }
+    .activity-badge.pesq { background:rgba(139,92,246,.1);  border:1px solid rgba(139,92,246,.3);  color:var(--purple2); }
+
+    /* ── Follow override */
+    .follow-row { display:none; padding-top:10px; }
+    .follow-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); margin-bottom:6px; display:block; }
+    .follow-btns { display:flex; gap:6px; }
+    .follow-btn {
+      flex:1; padding:7px; border-radius:8px; border:none; cursor:pointer;
+      font-family:'DM Mono',monospace; font-size:13px; font-weight:700;
+      background:var(--surface2); color:var(--dim);
+      border:1px solid var(--border); transition:all .15s;
+    }
+    .follow-btn:hover { border-color:var(--purple); color:var(--text); }
+    .follow-btn.active {
+      background:linear-gradient(135deg,rgba(139,92,246,.22),rgba(236,72,153,.12));
+      border-color:var(--purple); color:var(--purple2);
+    }
+
+    /* ── Cancel btn */
+    .btn-cancel {
+      display:none; width:calc(100% - 32px); margin:0 16px 12px;
+      padding:10px; border-radius:8px; border:none; cursor:pointer;
+      background:rgba(248,113,113,.1); color:var(--red);
+      border:1px solid rgba(248,113,113,.3);
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+    }
+    .btn-cancel.visible { display:block; }
+
+    /* ── Log */
+    .log-wrap { padding:12px 18px 14px; }
+    .log-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); margin-bottom:8px; }
+    .log-list { max-height:130px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; }
+    .log-item {
+      font-size:10px; font-family:'DM Mono',monospace;
+      padding:4px 10px; border-radius:5px;
+      background:var(--surface); border-left:2px solid var(--border); color:var(--dim);
+    }
+    .log-item.ok   { border-left-color:var(--green);  color:var(--green); }
+    .log-item.err  { border-left-color:var(--red);    color:var(--red); }
+    .log-item.info { border-left-color:var(--purple);  color:var(--purple2); }
+    .log-item.warn { border-left-color:var(--yellow); color:var(--yellow); }
+
+    /* ── Group tab */
+    .group-info { font-size:11px; color:var(--dim); line-height:1.7; padding:14px 18px; }
+    .group-info strong { color:var(--purple2); }
+    #group-status { font-size:11px; color:var(--green); padding:0 18px 8px; }
+
+    /* ── Botões genéricos */
+    .btn {
+      width:100%; padding:10px 14px; border-radius:8px; border:none;
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+      cursor:pointer; transition:all .15s;
+      display:flex; align-items:center; justify-content:center; gap:7px;
+    }
+    .btn-primary { background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:white; }
+    .btn-primary:hover:not(:disabled) {
+      background:linear-gradient(135deg,#a78bfa,#8b5cf6);
+      box-shadow:0 4px 14px rgba(139,92,246,.4); transform:translateY(-1px);
+    }
+    .btn-secondary { background:var(--surface2); color:var(--dim); border:1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color:var(--purple); color:var(--text); }
+    .btn:disabled { opacity:.35; cursor:not-allowed; transform:none !important; }
+
+    /* ── Config */
+    .config-toggle {
+      width:100%; padding:9px 18px; background:none; border:none;
+      border-top:1px solid var(--border); color:var(--dim); font-size:11px;
+      font-family:'DM Sans',sans-serif; cursor:pointer; text-align:left;
+      display:flex; align-items:center; gap:6px;
+    }
+    .config-toggle:hover { color:var(--text); }
+    .config-panel { display:none; padding:13px 18px; border-top:1px solid var(--border); }
+    .config-panel.open { display:block; }
+    .cfg-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
+    .cfg-label { font-size:11px; color:var(--dim); }
+    .cfg-input {
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:6px; padding:5px 10px;
+      font-size:11px; font-family:'DM Mono',monospace; color:var(--text); width:190px;
+    }
+    .cfg-input.short { width:55px; text-align:center; text-transform:uppercase; }
+    .cfg-input:focus { outline:none; border-color:var(--purple); }
+    .cfg-section-title { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--purple); margin:10px 0 7px; }
+
+    ::-webkit-scrollbar { width:4px; }
+    ::-webkit-scrollbar-track { background:var(--surface); }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  </style>
+</head>
+<body>
+
+  <div class="cursor" id="cursor"></div>
+  <div class="cursor-dot" id="cursor-dot"></div>
+
+  <div class="header">
+    <div class="logo">✦</div>
+    <div>
+      <h1>Bibly</h1>
+      <p>Automação SDR — Social Points & Pesquisa</p>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <span id="status-msg">Pronto</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="main">⚡ Executar</button>
+    <button class="tab" data-tab="group">🗂 Grupo</button>
+    <button class="tab" data-tab="log">📋 Log</button>
+  </div>
+
+  <!-- MAIN TAB -->
+  <div class="tab-content active" id="tab-main">
+
+    <div class="flow-section">
+      <div class="flow-section-label">Iniciar fluxo</div>
+      <div class="flow-btns">
+        <button class="flow-btn flow-btn-sp" id="btn-sp">
+          <span class="icon">💬</span>
+          <span class="label">Social Points</span>
+          <span class="sub">Follow 1 / 2 / 3</span>
+        </button>
+        <button class="flow-btn flow-btn-pesquisa" id="btn-pesquisa">
+          <span class="icon">🔍</span>
+          <span class="label">Pesquisa</span>
+          <span class="sub">Verificar retorno</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="running-indicator" id="running-indicator">
+      <div class="spinner"></div>
+      <span id="running-msg">Executando...</span>
+    </div>
+
+    <button class="btn-cancel" id="btn-cancel">✕ Cancelar automação</button>
+
+    <div class="lead-section">
+      <div class="lead-card" id="lead-card">Clique em um fluxo para iniciar</div>
+      <div class="follow-row" id="follow-row">
+        <span class="follow-label">Follow # detectado — clique para corrigir</span>
+        <div class="follow-btns">
+          <button class="follow-btn active" data-fn="1">1</button>
+          <button class="follow-btn" data-fn="2">2</button>
+          <button class="follow-btn" data-fn="3">3</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- GROUP TAB -->
+  <div class="tab-content" id="tab-group">
+    <div class="group-info">
+      <p>Cria o <strong>grupo "Bibly"</strong> com 3 abas:</p><br>
+      <p>🟣 <strong>Meetime</strong> — atividades</p>
+      <p>🔵 <strong>Kommo</strong> — chats</p>
+      <p>🟢 <strong>Planilha</strong> — feedback</p><br>
+      <p>O grupo é criado automaticamente ao abrir o popup.</p>
+    </div>
+    <div id="group-status"></div>
+    <div style="padding:0 18px 14px;">
+      <button class="btn btn-primary" id="btn-create-group">🗂 Criar / Atualizar grupo Bibly</button>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div class="tab-content" id="tab-log">
+    <div class="log-wrap">
+      <div class="log-label">Histórico</div>
+      <div class="log-list" id="log-list">
+        <div class="log-item info">✦ Bibly v3.1 iniciado</div>
+      </div>
+    </div>
+    <div style="padding:0 18px 14px;">
+      <button class="btn btn-secondary" id="btn-clear-log">🗑 Limpar log</button>
+    </div>
+  </div>
+
+  <button class="config-toggle" id="cfg-toggle">⚙ Configurações</button>
+  <div class="config-panel" id="cfg-panel">
+    <div class="cfg-section-title">Planilha</div>
+    <div class="cfg-row">
+      <span class="cfg-label">ID da Planilha</span>
+      <input class="cfg-input" id="cfg-sheet-id" value="1EyCf8dkvD8jLzvRTQ7NwiQ4Mo6TWE6ApXuWjHxtZpRg" />
+    </div>
+    <div class="cfg-section-title">Colunas</div>
+    <div class="cfg-row">
+      <span class="cfg-label">Nome do lead</span>
+      <input class="cfg-input short" id="cfg-name-col" value="C" maxlength="2" />
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-label">Telefone</span>
+      <input class="cfg-input short" id="cfg-phone-col" value="D" maxlength="2" />
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-label">Status</span>
+      <input class="cfg-input short" id="cfg-etapa-col" value="F" maxlength="2" />
+    </div>
+    <div class="cfg-section-title">Kommo</div>
+    <div class="cfg-row">
+      <span class="cfg-label">URL Kommo</span>
+      <input class="cfg-input" id="cfg-kommo-url" value="marketingcardapiowebcom.kommo.com" />
+    </div>
+    <button class="btn btn-primary" id="btn-save-cfg" style="margin-top:4px;">💾 Salvar</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

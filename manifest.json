@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Bibly",
+  "version": "3.0",
+  "description": "SDR Automation: Meetime → Kommo → Planilha",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "tabGroups"
+  ],
+  "host_permissions": [
+    "https://*.kommo.com/*",
+    "https://meetime.com.br/*",
+    "https://docs.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.kommo.com/*"],
+      "js": ["content_kommo.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://meetime.com.br/*"],
+      "js": ["content_meetime.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://docs.google.com/spreadsheets/*"],
+      "js": ["content_sheets.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
