@@ -33,6 +33,13 @@ input.addEventListener('input', () => {
   input.style.height = Math.min(input.scrollHeight, 100) + 'px';
 });
 
+// ─── Mostrar ações ao focar no input
+const macrosBar = document.querySelector('.macros-bar');
+input.addEventListener('focus', () => macrosBar.classList.add('visible'));
+input.addEventListener('blur', () => {
+  setTimeout(() => macrosBar.classList.remove('visible'), 200);
+});
+
 // Enter envia, Shift+Enter quebra linha
 input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
@@ -227,32 +234,6 @@ function escHtml(s) {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
 
-// ─── Atualizar barra de grupo
-function refreshGroupTabs() {
-  chrome.runtime.sendMessage({ action: 'GET_GROUP_TABS' }, res => {
-    const el = document.getElementById('group-tabs-info');
-    if (!res?.tabs?.length) {
-      el.innerHTML = '<span style="color:var(--dim);font-size:10px">Nenhuma aba no grupo</span>';
-      return;
-    }
-    el.innerHTML = res.tabs.map(t => {
-      const label = (t.title || new URL(t.url).hostname).slice(0, 22);
-      return `<span class="tab-pill">${escHtml(label)}</span>`;
-    }).join('');
-  });
-}
-
-document.getElementById('btn-group').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ action: 'CREATE_GROUP' }, res => {
-    if (res?.success) {
-      addInline(res.existing ? '✓ Grupo Bibi já está ativo' : '✓ Grupo Bibi criado! Adicione as abas que quiser.', 'ok');
-      refreshGroupTabs();
-    } else {
-      addInline('✗ Erro: ' + (res?.error || ''), 'err');
-    }
-  });
-});
-
 // ─── Conexão com background
 function connectBackground() {
   try { port = chrome.runtime.connect({ name: 'bibi_popup' }); }
@@ -293,7 +274,15 @@ function connectBackground() {
       case 'DONE':
         isRunning = false;
         btnSend.disabled = false;
-        refreshGroupTabs();
+        break;
+
+      case 'BULK_PROGRESS':
+        addInline(`📤 ${msg.current}/${msg.total} — ${msg.number}`, 'info');
+        break;
+
+      case 'BULK_DONE':
+        isRunning = false;
+        btnSend.disabled = false;
         break;
 
       case 'BIBI_MSG':
@@ -338,71 +327,138 @@ chrome.storage.local.get('groqKey', ({ groqKey }) => {
 // ─── Macros rápidas (SDR Parcerias)
 const MACROS = [
   {
-    icon: '🔴',
-    label: 'Sem retorno',
+    icon: '🔴', label: 'Sem retorno', desc: 'Marcar sem retorno',
+    bg: 'rgba(220,38,38,.13)',
     cmd: 'Na planilha de parcerias, preencha "Sem retorno" na coluna de hoje para os leads: '
   },
   {
-    icon: '📊',
-    label: 'Ver pendentes',
+    icon: '📊', label: 'Ver pendentes', desc: 'Ver atendimentos',
+    bg: 'rgba(109,40,217,.13)',
     cmd: 'Leia a planilha de parcerias e me mostre todos os meus leads ativos de hoje que ainda não têm atualização na coluna de hoje'
   },
   {
-    icon: '✅',
-    label: 'Follow enviado',
+    icon: '✅', label: 'Follow enviado', desc: 'Marcar follow-up',
+    bg: 'rgba(5,150,105,.13)',
     cmd: 'Na planilha de parcerias, preencha "Follow enviado" na coluna de hoje para os leads: '
   },
   {
-    icon: '📅',
-    label: 'Reagendado',
+    icon: '📅', label: 'Reagendado', desc: 'Reagendar lead',
+    bg: 'rgba(217,119,6,.13)',
     cmd: 'Na planilha de parcerias, preencha "Reagendado ' + new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + '" na coluna de hoje para o lead: '
   },
   {
-    icon: '🏆',
-    label: 'Ganho',
+    icon: '🏆', label: 'Ganho', desc: 'Marcar como ganho',
+    bg: 'rgba(5,150,105,.13)',
     cmd: 'Na planilha de parcerias, preencha "Ganho" na coluna de hoje e mude o Status para "Ganho" para o lead: '
   },
   {
-    icon: '❌',
-    label: 'Perdido',
+    icon: '❌', label: 'Perdido', desc: 'Marcar como perdido',
+    bg: 'rgba(220,38,38,.13)',
     cmd: 'Na planilha de parcerias, preencha "Perdido" na coluna de hoje e mude o Status para "Perdido" para o lead: '
   },
   {
-    icon: '🔍',
-    label: 'Buscar número',
+    icon: '🔍', label: 'Buscar número', desc: 'Achar telefone',
+    bg: 'rgba(109,40,217,.13)',
     cmd: 'Na planilha de parcerias, qual é o número de telefone do lead: '
   },
   {
-    icon: '📸',
-    label: 'Ler print',
+    icon: '📸', label: 'Ler print', desc: 'Enviar screenshot',
+    bg: 'rgba(217,119,6,.13)',
     cmd: '(Anexe um print da planilha com 📎) Leia a imagem e preencha a coluna de hoje conforme o status de cada lead'
   }
 ];
 
-function initMacros() {
-  const list = document.getElementById('macros-list');
-  if (!list) return;
-  MACROS.forEach(m => {
-    const btn = document.createElement('button');
-    btn.className = 'macro-chip';
-    btn.textContent = m.icon + ' ' + m.label;
-    btn.title = m.cmd;
-    btn.addEventListener('click', () => {
-      input.value = m.cmd;
-      input.style.height = 'auto';
-      input.style.height = Math.min(input.scrollHeight, 100) + 'px';
-      input.focus();
-      // Posiciona cursor no final
-      input.selectionStart = input.selectionEnd = m.cmd.length;
-    });
-    list.appendChild(btn);
+// ─── Modal Reativar Leads
+const modalOverlay  = document.getElementById('modal-reativar');
+const modalNumbers  = document.getElementById('modal-numbers');
+const modalMessage  = document.getElementById('modal-message');
+const modalCounter  = document.getElementById('modal-counter');
+const btnModalSend  = document.getElementById('btn-modal-send');
+const btnModalCancel = document.getElementById('btn-modal-cancel');
+
+function openReativarModal() { modalOverlay.classList.add('open'); }
+function closeReativarModal() { modalOverlay.classList.remove('open'); }
+
+modalNumbers.addEventListener('input', () => {
+  const count = modalNumbers.value.split('\n').map(n => n.trim()).filter(Boolean).length;
+  modalCounter.textContent = count + ' número' + (count !== 1 ? 's' : '');
+});
+
+btnModalCancel.addEventListener('click', closeReativarModal);
+modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeReativarModal(); });
+
+btnModalSend.addEventListener('click', () => {
+  const numbers = modalNumbers.value.split('\n').map(n => n.trim()).filter(Boolean);
+  const message = modalMessage.value.trim();
+  if (!numbers.length || !message) return;
+
+  closeReativarModal();
+  isRunning = true;
+  btnSend.disabled = true;
+  addInline(`📲 Enviando para ${numbers.length} número${numbers.length !== 1 ? 's' : ''}...`, 'info');
+  chrome.runtime.sendMessage({ action: 'SEND_WHATSAPP_BULK', numbers, message });
+});
+
+function makeMacroBtn(m) {
+  const btn = document.createElement('button');
+  btn.className = 'macro-btn';
+  btn.innerHTML = `
+    <div class="macro-icon" style="background:${m.bg}">${m.icon}</div>
+    <div class="macro-info">
+      <div class="macro-label">${m.label}</div>
+      <div class="macro-desc">${m.desc}</div>
+    </div>
+  `;
+  btn.addEventListener('click', () => {
+    if (m.type === 'modal') { openReativarModal(); return; }
+    input.value = m.cmd;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+    input.focus();
+    input.selectionStart = input.selectionEnd = m.cmd.length;
   });
+  return btn;
+}
+
+function initMacros() {
+  const list  = document.getElementById('macros-list');
+  const extra = document.getElementById('macros-extra');
+  if (!list) return;
+
+  // 3 botões principais
+  MACROS.slice(0, 3).forEach(m => list.appendChild(makeMacroBtn(m)));
+
+  // Botão "Mais ações"
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'macro-btn more';
+  moreBtn.innerHTML = `
+    <div class="macro-icon" style="background:var(--surface2)">➕</div>
+    <div class="macro-info">
+      <div class="macro-label">Mais ações</div>
+      <div class="macro-desc">Outras opções</div>
+    </div>
+  `;
+  let open = false;
+  moreBtn.addEventListener('click', () => {
+    open = !open;
+    extra.classList.toggle('open', open);
+    moreBtn.querySelector('.macro-icon').textContent = open ? '➖' : '➕';
+  });
+  list.appendChild(moreBtn);
+
+  // Ações extras (ocultas por padrão) — Reativar leads primeiro
+  const reativarBtn = makeMacroBtn({
+    icon: '📲', label: 'Reativar leads', desc: 'Envio em massa',
+    bg: 'rgba(5,150,105,.13)', type: 'modal'
+  });
+  extra.appendChild(reativarBtn);
+  MACROS.slice(3).forEach(m => extra.appendChild(makeMacroBtn(m)));
 }
 
 // ─── Init
 window.addEventListener('load', () => {
   connectBackground();
-  refreshGroupTabs();
+  chrome.runtime.sendMessage({ action: 'CREATE_GROUP' });
   initMacros();
-  addBibiMsg('Olá! Sou a Bibi ✨\nDiga o que quer que eu faça nas abas do grupo Bibi.\nSe ainda não criou o grupo, clique em **+ Grupo** acima.');
+  addBibiMsg('Oi! Sou a Bibi\nSua assistente virtual. O que vamos fazer hoje?');
 });

@@ -83,6 +83,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.set({ groqKey: msg.key }, () => sendResponse({ ok: true }));
     return true;
   }
+  if (msg.action === 'SEND_WHATSAPP_BULK') {
+    sendWhatsAppBulk(msg.numbers, msg.message);
+    sendResponse({ ok: true });
+    return;
+  }
 });
 
 // ─── Broadcast para popup
@@ -109,7 +114,7 @@ async function handleCommand(text, attachment) {
   if (!tabs.length) {
     broadcast({
       action: 'BIBI_MSG',
-      text: '⚠ Nenhuma aba no grupo Bibi ainda.\nClique em "+ Grupo" para criar o grupo e adicione as abas onde quero trabalhar.',
+      text: '⚠ Nenhuma aba no grupo Bibi. Feche e reabra a Bibi para criar o grupo automaticamente.',
       unlock: true
     });
     return;
@@ -589,6 +594,57 @@ function findTab(tabs, url) {
     const tu = norm(t.url);
     return tu.includes(target) || target.includes(tu.split('/')[0]);
   }) || tabs[0];
+}
+
+// ─── Reativar leads — envio em massa via WhatsApp Web
+function normalizePhone(phone) {
+  const d = phone.replace(/\D/g, '');
+  if (d.startsWith('55') && d.length >= 12) return d;
+  return '55' + d;
+}
+
+async function sendWhatsAppBulk(numbers, message) {
+  isRunning = true;
+  const tabs = await getBibiGroupTabs();
+  const waTabs = tabs.filter(t => t.url?.includes('web.whatsapp.com'));
+
+  if (!waTabs.length) {
+    broadcast({
+      action: 'BIBI_MSG',
+      text: '⚠ Não encontrei aba do WhatsApp Web no grupo Bibi.\nAdicione o WhatsApp ao grupo e tente novamente.',
+      unlock: true
+    });
+    isRunning = false;
+    return;
+  }
+
+  const waTab = waTabs[0];
+  let sent = 0;
+
+  for (let i = 0; i < numbers.length; i++) {
+    const raw = numbers[i];
+    const num = normalizePhone(raw);
+    const url = `https://web.whatsapp.com/send?phone=${num}&text=${encodeURIComponent(message)}`;
+
+    broadcast({ action: 'BULK_PROGRESS', current: i + 1, total: numbers.length, number: raw });
+
+    await chrome.tabs.update(waTab.id, { url, active: true });
+    await sleep(5000); // aguarda WhatsApp carregar o contato
+
+    // Pressiona Enter para enviar a mensagem pré-preenchida
+    const result = await sendToExecutor(waTab.id, { action: 'press_key', key: 'Enter', description: 'Enviar mensagem' });
+    if (result.success) sent++;
+
+    await sleep(1500);
+  }
+
+  isRunning = false;
+  broadcast({ action: 'BULK_DONE', total: sent });
+  broadcast({
+    action: 'BIBI_MSG',
+    text: `✅ Mensagem enviada para ${sent}/${numbers.length} contato${numbers.length !== 1 ? 's' : ''}!`,
+    unlock: true
+  });
 }
 
 // ─── Criar grupo Bibi
