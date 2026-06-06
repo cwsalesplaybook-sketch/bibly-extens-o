@@ -1,8 +1,9 @@
-// popup.js v4.0 — Bibi
+// popup.js v4.2 — Bibi
 
 let port = null;
 let isRunning = false;
 let currentPlanSteps = [];
+let pendingAttachment = null; // { type:'image'|'pdf', data:base64, mimeType, name, previewUrl }
 
 const chat    = document.getElementById('chat');
 const input   = document.getElementById('chat-input');
@@ -40,11 +41,56 @@ btnSend.addEventListener('click', send);
 
 function send() {
   const text = input.value.trim();
-  if (!text || isRunning) return;
-  addUserMsg(text);
+  if ((!text && !pendingAttachment) || isRunning) return;
+  addUserMsg(text, pendingAttachment);
+  const att = pendingAttachment;
+  pendingAttachment = null;
+  document.getElementById('__attach_prev__')?.remove();
   input.value = '';
   input.style.height = 'auto';
-  chrome.runtime.sendMessage({ action: 'COMMAND', text });
+  chrome.runtime.sendMessage({ action: 'COMMAND', text, attachment: att });
+}
+
+// ─── Upload de arquivo
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const reader = new FileReader();
+
+  if (file.type.startsWith('image/')) {
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      pendingAttachment = { type: 'image', data: base64, mimeType: file.type, name: file.name, previewUrl: reader.result };
+      showAttachPreview(file.name, '🖼️', reader.result);
+    };
+    reader.readAsDataURL(file);
+  } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+    reader.onload = () => {
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(reader.result)));
+      pendingAttachment = { type: 'pdf', data: base64, mimeType: 'application/pdf', name: file.name };
+      showAttachPreview(file.name, '📄', null);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+});
+
+function showAttachPreview(name, icon, previewUrl) {
+  document.getElementById('__attach_prev__')?.remove();
+  const div = document.createElement('div');
+  div.id = '__attach_prev__';
+  div.className = 'attach-preview';
+  div.innerHTML = `
+    ${previewUrl ? `<img src="${previewUrl}" class="msg-img" style="height:36px;border-radius:5px">` : `<span style="font-size:20px">${icon}</span>`}
+    <span class="attach-name">${escHtml(name)}</span>
+    <span class="attach-remove" id="__rem_att__">✕</span>
+  `;
+  document.querySelector('.input-box').before(div);
+  document.getElementById('__rem_att__').onclick = () => {
+    pendingAttachment = null;
+    div.remove();
+  };
 }
 
 // ─── Scroll
@@ -53,12 +99,15 @@ function scrollDown() {
 }
 
 // ─── Mensagem do usuário
-function addUserMsg(text) {
+function addUserMsg(text, att) {
   const wrap = document.createElement('div');
   wrap.className = 'msg user';
+  const attHtml = att?.previewUrl
+    ? `<img src="${att.previewUrl}" class="msg-img" alt="${escHtml(att.name)}">`
+    : att ? `<div style="font-size:11px;color:var(--dim);margin-top:3px">📄 ${escHtml(att.name)}</div>` : '';
   wrap.innerHTML = `
     <div class="msg-avatar">👤</div>
-    <div class="msg-bubble">${escHtml(text)}</div>
+    <div class="msg-bubble">${text ? escHtml(text) : ''}${attHtml}</div>
   `;
   chat.appendChild(wrap);
   scrollDown();
@@ -173,7 +222,9 @@ function setStepState(index, state) {
 }
 
 function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
 
 // ─── Atualizar barra de grupo
@@ -278,15 +329,80 @@ document.getElementById('btn-save-key').addEventListener('click', () => {
 });
 
 // Pré-preenche o campo se já tiver chave salva
-chrome.storage.local.get('geminiKey', ({ geminiKey }) => {
-  if (geminiKey) {
+chrome.storage.local.get('groqKey', ({ groqKey }) => {
+  if (groqKey) {
     document.getElementById('cfg-key').placeholder = '••••••• (já configurada)';
   }
 });
+
+// ─── Macros rápidas (SDR Parcerias)
+const MACROS = [
+  {
+    icon: '🔴',
+    label: 'Sem retorno',
+    cmd: 'Na planilha de parcerias, preencha "Sem retorno" na coluna de hoje para os leads: '
+  },
+  {
+    icon: '📊',
+    label: 'Ver pendentes',
+    cmd: 'Leia a planilha de parcerias e me mostre todos os meus leads ativos de hoje que ainda não têm atualização na coluna de hoje'
+  },
+  {
+    icon: '✅',
+    label: 'Follow enviado',
+    cmd: 'Na planilha de parcerias, preencha "Follow enviado" na coluna de hoje para os leads: '
+  },
+  {
+    icon: '📅',
+    label: 'Reagendado',
+    cmd: 'Na planilha de parcerias, preencha "Reagendado ' + new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + '" na coluna de hoje para o lead: '
+  },
+  {
+    icon: '🏆',
+    label: 'Ganho',
+    cmd: 'Na planilha de parcerias, preencha "Ganho" na coluna de hoje e mude o Status para "Ganho" para o lead: '
+  },
+  {
+    icon: '❌',
+    label: 'Perdido',
+    cmd: 'Na planilha de parcerias, preencha "Perdido" na coluna de hoje e mude o Status para "Perdido" para o lead: '
+  },
+  {
+    icon: '🔍',
+    label: 'Buscar número',
+    cmd: 'Na planilha de parcerias, qual é o número de telefone do lead: '
+  },
+  {
+    icon: '📸',
+    label: 'Ler print',
+    cmd: '(Anexe um print da planilha com 📎) Leia a imagem e preencha a coluna de hoje conforme o status de cada lead'
+  }
+];
+
+function initMacros() {
+  const list = document.getElementById('macros-list');
+  if (!list) return;
+  MACROS.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'macro-chip';
+    btn.textContent = m.icon + ' ' + m.label;
+    btn.title = m.cmd;
+    btn.addEventListener('click', () => {
+      input.value = m.cmd;
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+      input.focus();
+      // Posiciona cursor no final
+      input.selectionStart = input.selectionEnd = m.cmd.length;
+    });
+    list.appendChild(btn);
+  });
+}
 
 // ─── Init
 window.addEventListener('load', () => {
   connectBackground();
   refreshGroupTabs();
-  addBibiMsg('Olá! Sou a Bibi ✦\nDiga o que quer que eu faça nas abas do grupo Bibi.\nSe ainda não criou o grupo, clique em "+ Grupo" acima.');
+  initMacros();
+  addBibiMsg('Olá! Sou a Bibi ✨\nDiga o que quer que eu faça nas abas do grupo Bibi.\nSe ainda não criou o grupo, clique em **+ Grupo** acima.');
 });
