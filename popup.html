@@ -55,46 +55,6 @@
       transition: background .2s, color .2s;
     }
 
-    /* ── HEADER ── */
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 13px;
-      background: var(--bg);
-      border-bottom: 1.5px solid var(--border);
-      flex-shrink: 0;
-    }
-    .header-left { display: flex; align-items: center; gap: 9px; }
-
-    .logo-wrap {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      overflow: hidden;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .logo-wrap img {
-      width: 28px;
-      height: 28px;
-      max-width: 28px;
-      max-height: 28px;
-      object-fit: cover;
-      display: block;
-      flex-shrink: 0;
-    }
-
-    .header-name {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text);
-      letter-spacing: .01em;
-      font-family: 'Google Sans', 'Segoe UI', system-ui, sans-serif;
-    }
-
     .btn-icon {
       width: 28px; height: 28px;
       border-radius: 7px;
@@ -423,6 +383,7 @@
     }
     .tab-btn.active { color: var(--purple); border-bottom-color: var(--purple); }
     .tab-btn:hover:not(.active) { color: var(--text); }
+    .tab-nav .btn-icon { margin: 4px 6px; flex-shrink: 0; }
 
     #view-chat { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #view-macros {
@@ -563,24 +524,11 @@
 </head>
 <body>
 
-  <!-- Header -->
-  <div class="header">
-    <div class="header-left">
-      <div class="logo-wrap">
-        <img src="icons/icon128.png" alt="Bibi"
-             onerror="this.style.display='none'">
-      </div>
-      <span class="header-name">Bibi</span>
-    </div>
-    <div class="header-right">
-      <button class="btn-icon" id="btn-theme" title="Tema">🌙</button>
-    </div>
-  </div>
-
   <!-- Tabs nav -->
   <div class="tab-nav">
     <button class="tab-btn active" data-view="chat">Chat</button>
     <button class="tab-btn" data-view="macros">Atalhos ✦</button>
+    <button class="btn-icon" id="btn-theme" title="Tema">🌙</button>
   </div>
 
   <!-- ── VIEW CHAT ── -->
