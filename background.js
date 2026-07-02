@@ -83,6 +83,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.set({ groqKey: msg.key }, () => sendResponse({ ok: true }));
     return true;
   }
+  if (msg.action === 'EXPAND_MACRO_AI') {
+    expandMacroWithAI(msg.instruction, msg.context)
+      .then(text => sendResponse({ text }))
+      .catch(e => sendResponse({ text: '', error: e.message }));
+    return true;
+  }
+  if (msg.action === 'FIND_SPECIALIST') {
+    findSpecialist(msg.leadName, msg.whenText)
+      .then(result => sendResponse({ result }))
+      .catch(e => sendResponse({ result: null, error: e.message }));
+    return true;
+  }
   if (msg.action === 'SEND_WHATSAPP_BULK') {
     sendWhatsAppBulk(msg.numbers, msg.message);
     sendResponse({ ok: true });
@@ -645,6 +657,232 @@ async function sendWhatsAppBulk(numbers, message) {
     text: `✅ Mensagem enviada para ${sent}/${numbers.length} contato${numbers.length !== 1 ? 's' : ''}!`,
     unlock: true
   });
+}
+
+// ─── Autenticação Google (Calendar)
+// Usa launchWebAuthFlow (fluxo implícito) porque o Client ID criado foi do
+// tipo "Aplicativo da Web" (o tipo "Aplicativo do Chrome" não estava
+// disponível no Google Cloud Console). Não precisa da chave secreta.
+const GOOGLE_CLIENT_ID = '445824841694-5gtnile2de53q1ne842c1fa8skfp91jg.apps.googleusercontent.com';
+const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly';
+
+function getAuthToken(interactive = true) {
+  return new Promise((resolve, reject) => {
+    const redirectUri = chrome.identity.getRedirectURL();
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+    authUrl.searchParams.set('response_type', 'token');
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', GOOGLE_SCOPE);
+    authUrl.searchParams.set('prompt', interactive ? 'consent' : 'none');
+
+    chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive }, (redirectedTo) => {
+      if (chrome.runtime.lastError || !redirectedTo) {
+        reject(new Error(chrome.runtime.lastError?.message || 'Falha na autenticação com o Google.'));
+        return;
+      }
+      const hash = new URL(redirectedTo).hash.slice(1);
+      const token = new URLSearchParams(hash).get('access_token');
+      if (!token) {
+        reject(new Error('Token de acesso não retornado pelo Google.'));
+        return;
+      }
+      resolve(token);
+    });
+  });
+}
+
+// ─── Parser de data/hora em português (best-effort)
+function stripTime(d) { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; }
+function addDays(d, n) { const r = stripTime(d); r.setDate(r.getDate() + n); return r; }
+function ymd(d) {
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+function normalizePt(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function nextWeekday(from, targetDow) {
+  const start = stripTime(from);
+  const diff = (targetDow - start.getDay() + 7) % 7;
+  start.setDate(start.getDate() + diff);
+  return start;
+}
+
+const WEEKDAYS_PT = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
+// Retorna { date: Date, hasTime: boolean } ou null se nada reconhecível
+function parsePtBrDateTime(raw) {
+  const text = normalizePt(raw);
+  if (!text.trim()) return null;
+
+  const now = new Date();
+  let day = null;
+
+  if (/depois\s+de\s+amanh/.test(text)) {
+    day = addDays(now, 2);
+  } else if (/\bamanh/.test(text)) {
+    day = addDays(now, 1);
+  } else if (/\bhoje\b/.test(text)) {
+    day = addDays(now, 0);
+  } else {
+    const dm = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (dm) {
+      const d = parseInt(dm[1], 10);
+      const m = parseInt(dm[2], 10) - 1;
+      let y = dm[3] ? parseInt(dm[3], 10) : now.getFullYear();
+      if (y < 100) y += 2000;
+      const candidate = new Date(y, m, d);
+      if (!dm[3] && candidate < stripTime(now)) candidate.setFullYear(y + 1);
+      day = candidate;
+    } else {
+      for (let i = 0; i < WEEKDAYS_PT.length; i++) {
+        if (text.includes(WEEKDAYS_PT[i])) { day = nextWeekday(now, i); break; }
+      }
+    }
+  }
+
+  let hour = null, minute = 0;
+  const timeMatch = text.match(/\b(\d{1,2})[h:](\d{2})?\b/) || text.match(/\bas\s+(\d{1,2})\b/);
+  if (timeMatch) {
+    const h = parseInt(timeMatch[1], 10);
+    if (h >= 0 && h <= 23) {
+      hour = h;
+      minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    }
+  }
+
+  if (!day && hour === null) return null;
+  if (!day) day = stripTime(now);
+
+  const result = new Date(day);
+  if (hour !== null) result.setHours(hour, minute, 0, 0);
+  else result.setHours(0, 0, 0, 0);
+
+  return { date: result, hasTime: hour !== null };
+}
+
+// ─── Busca do especialista no Google Calendar
+async function findSpecialist(leadName, whenText) {
+  const name = (leadName || '').trim();
+  if (!name) throw new Error('Nome do lead não informado.');
+
+  let token;
+  try {
+    token = await getAuthToken(true);
+  } catch (e) {
+    throw new Error('Não foi possível autenticar com o Google: ' + e.message);
+  }
+
+  const parsed = parsePtBrDateTime(whenText);
+  let timeMin, timeMax, targetDayKey = null;
+  if (parsed) {
+    const dayStart = stripTime(parsed.date);
+    timeMin = dayStart;
+    timeMax = addDays(dayStart, 1);
+    targetDayKey = ymd(dayStart);
+  } else {
+    timeMin = new Date();
+    timeMax = addDays(new Date(), 14);
+  }
+
+  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
+  url.searchParams.set('q', name);
+  url.searchParams.set('timeMin', timeMin.toISOString());
+  url.searchParams.set('timeMax', timeMax.toISOString());
+  url.searchParams.set('singleEvents', 'true');
+  url.searchParams.set('orderBy', 'startTime');
+  url.searchParams.set('maxResults', '25');
+
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+
+  if (res.status === 401) {
+    throw new Error('Sessão do Google expirada. Clique em "Buscar na agenda" novamente para reconectar.');
+  }
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Google Calendar ${res.status}: ${errText.slice(0, 150)}`);
+  }
+
+  const data = await res.json();
+  const items = data.items || [];
+  const nameLower = name.toLowerCase();
+
+  let candidates = items.filter(ev => ev.summary && ev.summary.toLowerCase().includes(nameLower));
+
+  if (targetDayKey) {
+    const sameDay = candidates.filter(ev => {
+      const startStr = ev.start?.dateTime || ev.start?.date;
+      return startStr ? ymd(new Date(startStr)) === targetDayKey : false;
+    });
+    if (sameDay.length) candidates = sameDay;
+  }
+
+  if (!candidates.length) {
+    throw new Error(`Nenhum evento encontrado na agenda para "${name}".`);
+  }
+
+  candidates.sort((a, b) => {
+    const ta = new Date(a.start?.dateTime || a.start?.date).getTime();
+    const tb = new Date(b.start?.dateTime || b.start?.date).getTime();
+    return Math.abs(ta - timeMin.getTime()) - Math.abs(tb - timeMin.getTime());
+  });
+  const event = candidates[0];
+
+  const attendees = event.attendees || [];
+  const specialist = attendees.find(a =>
+    a.organizer !== true &&
+    typeof a.email === 'string' &&
+    a.email.toLowerCase().endsWith('@cardapioweb.com')
+  );
+
+  if (!specialist) {
+    throw new Error(`Evento "${event.summary}" encontrado, mas sem convidado @cardapioweb.com.`);
+  }
+
+  return {
+    name: specialist.displayName || specialist.email.split('@')[0],
+    email: specialist.email,
+    eventStart: event.start?.dateTime || event.start?.date,
+    eventSummary: event.summary
+  };
+}
+
+// ─── Expansão de macro com IA
+async function expandMacroWithAI(instruction, context) {
+  const { groqKey } = await chrome.storage.local.get('groqKey');
+  if (!groqKey) throw new Error('Chave Groq não configurada.');
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${groqKey}`
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{
+        role: 'system',
+        content: 'Você é Bibi, assistente de escrita. Escreva APENAS o texto solicitado, sem explicações, aspas ou prefixos. Texto natural, direto e pronto para ser inserido.'
+      }, {
+        role: 'user',
+        content: `Contexto: ${context}\n\nInstrução: ${instruction}`
+      }],
+      temperature: 0.7,
+      max_tokens: 512
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    let msg;
+    try { msg = JSON.parse(err).error?.message || err.slice(0, 200); }
+    catch(_) { msg = err.slice(0, 200); }
+    throw new Error(`Groq ${res.status}: ${msg}`);
+  }
+
+  const data = await res.json();
+  return data.choices[0].message.content.trim();
 }
 
 // ─── Criar grupo Bibi

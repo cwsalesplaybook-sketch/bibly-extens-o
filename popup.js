@@ -461,4 +461,191 @@ window.addEventListener('load', () => {
   chrome.runtime.sendMessage({ action: 'CREATE_GROUP' });
   initMacros();
   addBibiMsg('Oi! Sou a Bibi\nSua assistente virtual. O que vamos fazer hoje?');
+  loadMacrosData();
+  initMacrosTab();
 });
+
+// ════════════════════════════════════════════
+// ATALHOS (text expander)
+// ════════════════════════════════════════════
+
+let bibMacros = [];
+let editingMacroId = null;
+
+const ICONS = ['⚡','📝','👋','📞','🤝','💼','📋','✅','❌','🔴','🟢','📊','🔍','💡','🎯','📧','💬','🚀','🎉','⭐'];
+
+function getDefaultMacros() {
+  return [
+    {
+      id: 'def_1',
+      icon: '👋',
+      shortcut: 'oi',
+      label: 'Saudação inicial',
+      content: 'Olá {{nome}}, tudo bem? Passando para retomar nosso contato! 😊',
+      aiEnhanced: false
+    },
+    {
+      id: 'def_2',
+      icon: '📞',
+      shortcut: 'followup',
+      label: 'Follow-up IA',
+      content: 'Escreva uma mensagem de follow-up comercial calorosa e profissional para um lead de parceria que ainda não respondeu. Tom: amigável e direto. Máximo 3 linhas.',
+      aiEnhanced: true
+    },
+    {
+      id: 'def_3',
+      icon: '📋',
+      shortcut: 'proposta',
+      label: 'Proposta comercial',
+      content: '{{nome}}, conforme conversamos, segue nossa proposta:\n\n{{descricao}}\n\nFico à disposição para tirar qualquer dúvida! 🚀',
+      aiEnhanced: false
+    }
+  ];
+}
+
+function loadMacrosData() {
+  chrome.storage.local.get('bibiMacros', ({ bibiMacros }) => {
+    if (!bibiMacros) {
+      bibMacros = getDefaultMacros();
+      chrome.storage.local.set({ bibiMacros: bibMacros });
+    } else {
+      bibMacros = bibiMacros;
+    }
+  });
+}
+
+function saveMacrosData() {
+  chrome.storage.local.set({ bibiMacros: bibMacros });
+}
+
+function renderMacroList() {
+  const container = document.getElementById('macro-list');
+  if (!container) return;
+
+  if (!bibMacros.length) {
+    container.innerHTML = `
+      <div class="mv-empty">
+        Nenhum atalho criado ainda.<br>
+        Clique em <b>+ Novo</b> para começar.<br><br>
+        <b>/atalho</b> em qualquer campo expande automaticamente.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = bibMacros.map(m => `
+    <div class="mitem" data-id="${escHtml(m.id)}">
+      <div class="mitem-icon">${escHtml(m.icon || '⚡')}</div>
+      <div class="mitem-info">
+        <div class="mitem-shortcut">/${escHtml(m.shortcut)}${m.aiEnhanced ? '  ·  ✨ IA' : ''}</div>
+        <div class="mitem-lbl">${escHtml(m.label)}</div>
+        <div class="mitem-preview">${escHtml(m.content.slice(0, 64))}${m.content.length > 64 ? '…' : ''}</div>
+      </div>
+      <button class="mitem-del" data-id="${escHtml(m.id)}" title="Deletar">🗑</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.mitem').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.mitem-del')) return;
+      const macro = bibMacros.find(m => m.id === el.dataset.id);
+      if (macro) openMacroEditor(macro);
+    });
+  });
+
+  container.querySelectorAll('.mitem-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = bibMacros.find(m => m.id === btn.dataset.id);
+      if (!m) return;
+      if (!confirm(`Deletar /${m.shortcut}?`)) return;
+      bibMacros = bibMacros.filter(x => x.id !== btn.dataset.id);
+      saveMacrosData();
+      renderMacroList();
+    });
+  });
+}
+
+function openMacroEditor(macro = null) {
+  editingMacroId = macro?.id || null;
+  document.getElementById('macro-modal-title').textContent = macro ? 'Editar atalho' : 'Novo atalho';
+  document.getElementById('macro-icon-btn').textContent = macro?.icon || '⚡';
+  document.getElementById('macro-shortcut').value = macro?.shortcut || '';
+  document.getElementById('macro-label-inp').value = macro?.label || '';
+  document.getElementById('macro-content').value = macro?.content || '';
+  document.getElementById('macro-ai').checked = macro?.aiEnhanced || false;
+  document.getElementById('modal-macro').classList.add('open');
+}
+
+function closeMacroEditor() {
+  document.getElementById('modal-macro').classList.remove('open');
+  editingMacroId = null;
+}
+
+function saveMacro() {
+  const icon      = document.getElementById('macro-icon-btn').textContent.trim();
+  const shortcut  = document.getElementById('macro-shortcut').value.trim().toLowerCase().replace(/[^\w-]/g, '');
+  const label     = document.getElementById('macro-label-inp').value.trim();
+  const content   = document.getElementById('macro-content').value.trim();
+  const aiEnhanced = document.getElementById('macro-ai').checked;
+
+  if (!shortcut || !content) {
+    alert('Preencha o atalho e o conteúdo.');
+    return;
+  }
+
+  if (editingMacroId) {
+    const idx = bibMacros.findIndex(m => m.id === editingMacroId);
+    if (idx !== -1) {
+      bibMacros[idx] = { id: editingMacroId, icon, shortcut, label: label || shortcut, content, aiEnhanced };
+    }
+  } else {
+    bibMacros.push({ id: 'macro_' + Date.now(), icon, shortcut, label: label || shortcut, content, aiEnhanced });
+  }
+
+  saveMacrosData();
+  closeMacroEditor();
+  renderMacroList();
+}
+
+function initMacrosTab() {
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      const chat = document.getElementById('view-chat');
+      const macros = document.getElementById('view-macros');
+      if (view === 'chat') {
+        chat.style.display = 'flex';
+        macros.style.display = 'none';
+      } else {
+        chat.style.display = 'none';
+        macros.style.display = 'flex';
+        renderMacroList();
+      }
+    });
+  });
+
+  // Icon picker (cicla pelos emojis)
+  document.getElementById('macro-icon-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('macro-icon-btn');
+    const cur = btn.textContent.trim();
+    const idx = ICONS.indexOf(cur);
+    btn.textContent = ICONS[(idx + 1) % ICONS.length];
+  });
+
+  // Editor modal buttons
+  document.getElementById('btn-add-macro')?.addEventListener('click', () => openMacroEditor());
+  document.getElementById('btn-macro-cancel')?.addEventListener('click', closeMacroEditor);
+  document.getElementById('btn-macro-save')?.addEventListener('click', saveMacro);
+  document.getElementById('modal-macro')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-macro')) closeMacroEditor();
+  });
+
+  // Shortcut: permite só letras/números/underscore
+  document.getElementById('macro-shortcut')?.addEventListener('input', e => {
+    e.target.value = e.target.value.toLowerCase().replace(/[^\w-]/g, '');
+  });
+}
