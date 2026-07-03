@@ -58,48 +58,6 @@ function send() {
   chrome.runtime.sendMessage({ action: 'COMMAND', text, attachment: att });
 }
 
-// ─── Upload de arquivo
-document.getElementById('file-input').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  e.target.value = '';
-
-  const reader = new FileReader();
-
-  if (file.type.startsWith('image/')) {
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      pendingAttachment = { type: 'image', data: base64, mimeType: file.type, name: file.name, previewUrl: reader.result };
-      showAttachPreview(file.name, '🖼️', reader.result);
-    };
-    reader.readAsDataURL(file);
-  } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    reader.onload = () => {
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(reader.result)));
-      pendingAttachment = { type: 'pdf', data: base64, mimeType: 'application/pdf', name: file.name };
-      showAttachPreview(file.name, '📄', null);
-    };
-    reader.readAsArrayBuffer(file);
-  }
-});
-
-function showAttachPreview(name, icon, previewUrl) {
-  document.getElementById('__attach_prev__')?.remove();
-  const div = document.createElement('div');
-  div.id = '__attach_prev__';
-  div.className = 'attach-preview';
-  div.innerHTML = `
-    ${previewUrl ? `<img src="${previewUrl}" class="msg-img" style="height:36px;border-radius:5px">` : `<span style="font-size:20px">${icon}</span>`}
-    <span class="attach-name">${escHtml(name)}</span>
-    <span class="attach-remove" id="__rem_att__">✕</span>
-  `;
-  document.querySelector('.input-box').before(div);
-  document.getElementById('__rem_att__').onclick = () => {
-    pendingAttachment = null;
-    div.remove();
-  };
-}
-
 // ─── Scroll
 function scrollDown() {
   requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
@@ -360,11 +318,6 @@ const MACROS = [
     icon: '🔍', label: 'Buscar número', desc: 'Achar telefone',
     bg: 'rgba(109,40,217,.13)',
     cmd: 'Na planilha de parcerias, qual é o número de telefone do lead: '
-  },
-  {
-    icon: '📸', label: 'Ler print', desc: 'Enviar screenshot',
-    bg: 'rgba(217,119,6,.13)',
-    cmd: '(Anexe um print da planilha com 📎) Leia a imagem e preencha a coluna de hoje conforme o status de cada lead'
   }
 ];
 

@@ -259,15 +259,6 @@
       background: var(--bg);
       flex-shrink: 0;
     }
-    .attach-preview {
-      display: flex; align-items: center; gap: 7px;
-      padding: 5px 9px; margin-bottom: 6px;
-      background: var(--surface2);
-      border: 1.5px solid var(--border); border-radius: 9px;
-      font-size: 11px;
-    }
-    .attach-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dim); }
-    .attach-remove { cursor:pointer; color:var(--red); font-size:16px; flex-shrink:0; }
 
     .input-box {
       background: var(--surface);
@@ -291,16 +282,8 @@
     .chat-input::placeholder { color: var(--dim); }
     .input-toolbar {
       display: flex; align-items: center;
-      justify-content: space-between; margin-top: 7px;
+      justify-content: flex-end; margin-top: 7px;
     }
-    .btn-attach {
-      width: 29px; height: 29px; border-radius: 8px;
-      border: 1.5px solid var(--border); background: transparent;
-      color: var(--dim); font-size: 15px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all .15s;
-    }
-    .btn-attach:hover { background: var(--surface2); color: var(--purple); border-color: var(--purple); }
     .btn-send {
       width: 33px; height: 33px; border-radius: 50%; border: none;
       background: var(--send); color: #fff; font-size: 16px; cursor: pointer;
@@ -600,10 +583,6 @@
       <textarea class="chat-input" id="chat-input"
         placeholder="Como posso ajudar?" rows="1"></textarea>
       <div class="input-toolbar">
-        <label class="btn-attach" title="Anexar imagem ou PDF">
-          📎
-          <input type="file" id="file-input" accept="image/*,.pdf" style="display:none">
-        </label>
         <button class="btn-send" id="btn-send">↑</button>
       </div>
     </div>
