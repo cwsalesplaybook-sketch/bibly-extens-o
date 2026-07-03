@@ -311,17 +311,6 @@
     .btn-send:disabled { opacity:.25; cursor:not-allowed; transform:none; box-shadow:none; }
 
     /* ── SETTINGS ── */
-    .settings-toggle {
-      width: 100%; padding: 7px 14px;
-      background: var(--bg); border: none;
-      border-top: 1.5px solid var(--border);
-      color: var(--dim); font-size: 10px; font-family: inherit;
-      font-weight: 600; cursor: pointer; text-align: left;
-      display: flex; align-items: center; gap: 5px;
-      text-transform: uppercase; letter-spacing: .05em;
-      transition: color .15s;
-    }
-    .settings-toggle:hover { color: var(--purple); }
     .settings-panel {
       display: none; padding: 11px 14px;
       border-top: 1.5px solid var(--border);
@@ -587,7 +576,8 @@
   <!-- Tabs nav -->
   <div class="tab-nav">
     <button class="tab-btn active" data-view="chat">Chat</button>
-    <button class="tab-btn" data-view="macros">Atalhos ✦</button>
+    <button class="tab-btn" data-view="macros">Atalhos</button>
+    <button class="btn-icon" id="settings-toggle" title="Configurações">⚙</button>
     <button class="btn-icon" id="btn-theme" title="Tema">🌙</button>
   </div>
 
@@ -619,7 +609,6 @@
     </div>
   </div>
 
-  <button class="settings-toggle" id="settings-toggle">⚙ Configurações</button>
   <div class="settings-panel" id="settings-panel">
     <div class="settings-row">
       <span class="settings-label">Chave API</span>
