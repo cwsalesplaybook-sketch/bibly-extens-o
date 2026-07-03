@@ -9,24 +9,6 @@ const chat    = document.getElementById('chat');
 const input   = document.getElementById('chat-input');
 const btnSend = document.getElementById('btn-send');
 
-// ─── Tema claro/escuro
-(function initTheme() {
-  const saved = localStorage.getItem('bibi_theme') || 'light';
-  applyTheme(saved);
-})();
-
-function applyTheme(theme) {
-  document.body.classList.toggle('dark', theme === 'dark');
-  const btn = document.getElementById('btn-theme');
-  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-  localStorage.setItem('bibi_theme', theme);
-}
-
-document.getElementById('btn-theme').addEventListener('click', () => {
-  const isDark = document.body.classList.contains('dark');
-  applyTheme(isDark ? 'light' : 'dark');
-});
-
 // ─── Auto-resize textarea
 input.addEventListener('input', () => {
   input.style.height = 'auto';
