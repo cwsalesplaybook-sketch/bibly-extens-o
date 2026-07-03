@@ -126,7 +126,7 @@ function addBibiMsg(text) {
   wrap.className = 'msg bibi';
   wrap.innerHTML = `
     <div class="msg-avatar">
-      <img src="icons/avatar-hat.png" alt="Bibi"
+      <img src="icons/avatar-bruxinha.png" alt="Bibi"
            onerror="this.style.display='none';this.parentElement.textContent='✦'">
     </div>
     <div class="msg-bubble">${escHtml(text)}</div>
@@ -143,7 +143,7 @@ function addThinking() {
   wrap.id = '__thinking__';
   wrap.innerHTML = `
     <div class="msg-avatar">
-      <img src="icons/avatar-hat.png" alt="Bibi"
+      <img src="icons/avatar-bruxinha.png" alt="Bibi"
            onerror="this.style.display='none';this.parentElement.textContent='✦'">
     </div>
     <div class="msg-bubble thinking">
@@ -184,7 +184,7 @@ function addPlanCard(plan) {
 
   wrap.innerHTML = `
     <div class="msg-avatar">
-      <img src="icons/avatar-hat.png" alt="Bibi"
+      <img src="icons/avatar-bruxinha.png" alt="Bibi"
            onerror="this.style.display='none';this.parentElement.textContent='✦'">
     </div>
     <div class="plan-card">
