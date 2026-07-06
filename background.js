@@ -71,12 +71,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
     return;
   }
-  if (msg.action === 'CREATE_GROUP') {
-    createBibiGroup().then(sendResponse);
-    return true;
-  }
   if (msg.action === 'GET_GROUP_TABS') {
-    getBibiGroupTabs().then(tabs => sendResponse({ tabs }));
+    getAvailableTabs().then(tabs => sendResponse({ tabs }));
     return true;
   }
   if (msg.action === 'SAVE_KEY') {
@@ -109,12 +105,11 @@ function broadcast(msg) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ─── Abas do grupo Bibi
-async function getBibiGroupTabs() {
+// ─── Abas disponíveis pra automação (todas as abas da janela atual —
+// Bibi não agrupa mais abas, funciona só como painel lateral).
+async function getAvailableTabs() {
   try {
-    const groups = await chrome.tabGroups.query({ title: 'Bibi' });
-    if (!groups.length) return [];
-    return await chrome.tabs.query({ groupId: groups[0].id });
+    return await chrome.tabs.query({ currentWindow: true });
   } catch(_) { return []; }
 }
 
@@ -122,11 +117,11 @@ async function getBibiGroupTabs() {
 async function handleCommand(text, attachment) {
   if (isRunning) return;
 
-  const tabs = await getBibiGroupTabs();
+  const tabs = await getAvailableTabs();
   if (!tabs.length) {
     broadcast({
       action: 'BIBI_MSG',
-      text: '⚠ Nenhuma aba no grupo Bibi. Feche e reabra a Bibi para criar o grupo automaticamente.',
+      text: '⚠ Nenhuma aba aberta pra trabalhar. Abra a aba que você quer automatizar e tente de novo.',
       unlock: true
     });
     return;
@@ -178,7 +173,7 @@ DATA DE HOJE: ${todayStr} (${todayShort})
 COLUNA DE HOJE NO SHEETS DE ACOMPANHAMENTO: ${todayCol}
 (As colunas de data começam em K=01/06, L=02/06, M=03/06... ${todayCol}=${todayShort})
 
-ABAS DISPONÍVEIS (grupo Bibi — você SOMENTE pode trabalhar nelas):
+ABAS DISPONÍVEIS (você SOMENTE pode trabalhar nelas):
 ${tabsDesc}
 
 COMANDO:
@@ -617,13 +612,13 @@ function normalizePhone(phone) {
 
 async function sendWhatsAppBulk(numbers, message) {
   isRunning = true;
-  const tabs = await getBibiGroupTabs();
+  const tabs = await getAvailableTabs();
   const waTabs = tabs.filter(t => t.url?.includes('web.whatsapp.com'));
 
   if (!waTabs.length) {
     broadcast({
       action: 'BIBI_MSG',
-      text: '⚠ Não encontrei aba do WhatsApp Web no grupo Bibi.\nAdicione o WhatsApp ao grupo e tente novamente.',
+      text: '⚠ Não encontrei aba do WhatsApp Web aberta.\nAbra o WhatsApp Web em uma aba e tente novamente.',
       unlock: true
     });
     isRunning = false;
@@ -885,14 +880,3 @@ async function expandMacroWithAI(instruction, context) {
   return data.choices[0].message.content.trim();
 }
 
-// ─── Criar grupo Bibi
-async function createBibiGroup() {
-  try {
-    const existing = await chrome.tabGroups.query({ title: 'Bibi' });
-    if (existing.length) return { success: true, existing: true };
-    const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const gid = await chrome.tabs.group({ tabIds: [currentTab.id] });
-    await chrome.tabGroups.update(gid, { title: 'Bibi', color: 'purple' });
-    return { success: true, existing: false };
-  } catch(e) { return { success: false, error: e.message }; }
-}

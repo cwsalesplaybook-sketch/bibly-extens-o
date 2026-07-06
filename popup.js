@@ -393,7 +393,6 @@ function initMacros() {
 // ─── Init
 window.addEventListener('load', () => {
   connectBackground();
-  chrome.runtime.sendMessage({ action: 'CREATE_GROUP' });
   initMacros();
   addBibiMsg('Oi! Sou a Bibi\nSua assistente virtual. O que vamos fazer hoje?');
   loadMacrosData();
@@ -439,18 +438,29 @@ function getDefaultMacros() {
 }
 
 function loadMacrosData() {
-  chrome.storage.local.get('bibiMacros', ({ bibiMacros }) => {
-    if (!bibiMacros) {
-      bibMacros = getDefaultMacros();
-      chrome.storage.local.set({ bibiMacros: bibMacros });
-    } else {
-      bibMacros = bibiMacros;
+  chrome.storage.local.get('bibiMacros', (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('Bibi: falha ao carregar atalhos', chrome.runtime.lastError);
+      return; // não mexe em bibMacros nem grava nada por cima em caso de erro
     }
+    if (result.bibiMacros === undefined) {
+      // Só cai aqui na primeiríssima vez (chave nunca foi criada).
+      bibMacros = getDefaultMacros();
+      saveMacrosData();
+    } else {
+      bibMacros = result.bibiMacros;
+    }
+    renderMacroList();
   });
 }
 
 function saveMacrosData() {
-  chrome.storage.local.set({ bibiMacros: bibMacros });
+  chrome.storage.local.set({ bibiMacros: bibMacros }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Bibi: falha ao salvar atalhos', chrome.runtime.lastError);
+      alert('Não consegui salvar o atalho, tente de novo.');
+    }
+  });
 }
 
 function renderMacroList() {
