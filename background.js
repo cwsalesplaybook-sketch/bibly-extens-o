@@ -1,4 +1,4 @@
-// background.js v4.5 — Bibi (Groq) — sheetsFind + fillCell fix
+// background.js v4.7 — Bibi (Groq) — sheetsFind + fillCell fix + modo de dúvidas
 
 async function callGroq(prompt) {
   const { groqKey } = await chrome.storage.local.get('groqKey');
@@ -131,6 +131,10 @@ async function handleCommand(text, attachment) {
 
   try {
     const plan = await generatePlan(text, tabs, attachment);
+    if (plan?.tipo === 'duvida') {
+      broadcast({ action: 'BIBI_MSG', text: plan.resposta || 'Não entendi a dúvida, pode reformular?', unlock: true });
+      return;
+    }
     if (!plan?.steps?.length) {
       broadcast({
         action: 'BIBI_MSG',
@@ -167,7 +171,11 @@ async function generatePlan(command, tabs, attachment) {
   const todayShort = today.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
   const todayCol = getTodaySheetColumn();
 
-  const prompt = `Você é Bibi, assistente pessoal de automação de browser. Receba o comando do usuário e gere um plano de execução em JSON.
+  const prompt = `Você é Bibi, assistente pessoal de automação de browser. Receba a mensagem do usuário e responda em JSON.
+
+PRIMEIRO: decida se a mensagem é uma DÚVIDA (pergunta sobre como algo funciona, o que uma função faz, dúvida geral — não pede pra você fazer nada agora) ou uma TAREFA (pede uma ação de automação no navegador).
+- Se for DÚVIDA: responda só com {"tipo": "duvida", "resposta": "texto explicando/respondendo, direto e objetivo"}. NÃO gere steps.
+- Se for TAREFA: gere o plano de execução normalmente, incluindo "tipo": "tarefa" no JSON.
 
 DATA DE HOJE: ${todayStr} (${todayShort})
 COLUNA DE HOJE NO SHEETS DE ACOMPANHAMENTO: ${todayCol}
@@ -242,8 +250,14 @@ REGRAS CRÍTICAS:
 - Para WhatsApp: sempre use press_key Enter para enviar.
 - Para Sheets: use fill_cell para preencher, read_page para ler.
 
-Responda SOMENTE com JSON válido, sem markdown:
+Responda SOMENTE com JSON válido, sem markdown. Pra dúvida:
 {
+  "tipo": "duvida",
+  "resposta": "texto de resposta"
+}
+Pra tarefa:
+{
+  "tipo": "tarefa",
   "plan_description": "Resumo do que vou fazer",
   "steps": [
     {
