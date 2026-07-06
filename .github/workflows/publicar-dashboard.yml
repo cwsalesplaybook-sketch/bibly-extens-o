@@ -1,0 +1,48 @@
+name: Publicar extensão no dashboard
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout extensão
+        uses: actions/checkout@v4
+
+      - name: Ler versão do manifest
+        id: versao
+        run: echo "versao=$(jq -r .version manifest.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Gerar zip da extensão
+        run: zip -r bibi-extensao.zip . -x '.git/*' '.github/*' 'launch.json' '.gitignore'
+
+      - name: Checkout dashboard
+        uses: actions/checkout@v4
+        with:
+          repository: cwsalesplaybook-sketch/cwsalesplaybook
+          token: ${{ secrets.DASHBOARD_REPO_TOKEN }}
+          path: dashboard
+
+      - name: Publicar zip e versão no dashboard
+        run: |
+          mkdir -p dashboard/public/downloads
+          cp bibi-extensao.zip dashboard/public/downloads/bibi-extensao.zip
+          printf '{"versao":"%s","atualizadoEm":"%s"}\n' "${{ steps.versao.outputs.versao }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dashboard/public/downloads/bibi-versao.json
+
+      - name: Commit e push no dashboard
+        working-directory: dashboard
+        run: |
+          git config user.name "bibi-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/downloads/bibi-extensao.zip public/downloads/bibi-versao.json
+          if git diff --cached --quiet; then
+            echo "Nada mudou, pulando commit."
+          else
+            git commit -m "chore: publica extensão Bibi v${{ steps.versao.outputs.versao }}"
+            git push
+          fi
